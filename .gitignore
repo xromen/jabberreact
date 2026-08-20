@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.vs/
+.idea/
+*.tsbuildinfo
+npm-debug.log*
