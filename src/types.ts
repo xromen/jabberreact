@@ -6,7 +6,7 @@ export interface Contact {
   jid: string
   name: string
   groups: string[]
-  presence: PresenceState
+  presence?: PresenceState
   status?: string
 }
 

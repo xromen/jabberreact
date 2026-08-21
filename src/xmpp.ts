@@ -14,6 +14,7 @@ class XmppConnection extends EventTarget {
     this.emit('state', { state: 'connecting' })
 
     const connection = new Strophe.Connection(settings.service)
+    connection.maxRetries = 5;
     this.connection = connection
 
     return new Promise<string>((resolve, reject) => {
@@ -38,6 +39,7 @@ class XmppConnection extends EventTarget {
           connection.sendIQ($iq({ type: 'get' }).c('query', { xmlns: Strophe.NS.ROSTER }), (stanza) => this.onRoster(stanza))
           const domain = Strophe.getDomainFromJid(connection.jid) || Strophe.getDomainFromJid(settings.jid) || login.server
           this.loadServerUsers(connection, domain)
+
           if (!settled) {
             settled = true
             resolve(this.account)
@@ -85,6 +87,10 @@ class XmppConnection extends EventTarget {
     connection.addHandler((stanza) => this.onMessage(stanza), null, 'message', null)
     connection.addHandler((stanza) => this.onPresence(stanza), null, 'presence', null)
     connection.addHandler((stanza) => {
+      console.log(stanza)
+      return false
+    }, null, 'iq', null)
+    connection.addHandler((stanza) => {
       this.onRoster(stanza)
       const attributes: Record<string, string> = { type: 'result' }
       const id = stanza.getAttribute('id')
@@ -109,6 +115,13 @@ class XmppConnection extends EventTarget {
         }
       })
     this.emit('roster', contacts)
+  }
+
+  private getLastLogout(connection: InstanceType<typeof Strophe.Connection>, jid: string) {
+    connection.sendIQ($iq({ type: 'get', to: jid }).c('query', { xmlns: 'jabber:iq:last' }), (stanza) => {
+      this.emit('logout', stanza.getElementsByTagName('query')[0]?.getAttribute('seconds'))
+      return true
+    })
   }
 
   private loadServerUsers(connection: InstanceType<typeof Strophe.Connection>, domain: string) {
@@ -157,11 +170,12 @@ class XmppConnection extends EventTarget {
     const from = bareJid(stanza.getAttribute('from') || '')
     if (!from || from === this.account) return true
     const show = stanza.getElementsByTagName('show')[0]?.textContent
-    this.emit('presence', {
+    const detail = {
       jid: from,
       presence: stanza.getAttribute('type') === 'unavailable' ? 'offline' : show === 'dnd' ? 'dnd' : show === 'away' || show === 'xa' ? 'away' : 'online',
       status: stanza.getElementsByTagName('status')[0]?.textContent || '',
-    })
+    }
+    this.emit('presence', detail)
     return true
   }
 
