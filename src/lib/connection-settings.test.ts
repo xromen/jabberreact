@@ -1,10 +1,17 @@
-import assert from 'node:assert/strict'
-import test from 'node:test'
-import { connectionSettings } from './connection-settings.ts'
+import assert from "node:assert/strict";
+import test from "node:test";
+import { connectionSettings } from "./connection-settings.ts";
 
-test('builds a direct Openfire BOSH URL and keeps a full JID domain', () => {
+test("строит WebSocket URL и сохраняет домен полного JID", () => {
   assert.deepEqual(
-    connectionSettings({ username: 'max@example.org', password: 'secret', server: 'openfire.internal' }),
-    { service: 'http://openfire.internal:7070/http-bind/', jid: 'max@example.org' },
-  )
-})
+    connectionSettings({
+      username: "max@example.org",
+      password: "secret",
+      server: "openfire.internal",
+    }),
+    {
+      service: "ws://openfire.internal:7070/ws/",
+      jid: "max@example.org",
+    },
+  );
+});

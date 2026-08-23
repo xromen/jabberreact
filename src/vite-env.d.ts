@@ -2,8 +2,8 @@
 
 interface Window {
   __JABBER_CONFIG__?: {
-    defaultServer?: string
-    defaultHttpPort?: number
-    defaultHttpPath?: string
-  }
+    defaultServer?: string;
+    defaultHttpPort?: number;
+    defaultHttpPath?: string;
+  };
 }

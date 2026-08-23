@@ -1,5 +1,5 @@
 window.__JABBER_CONFIG__ = {
-  defaultServer: '',
+  defaultServer: "",
   defaultHttpPort: 7070,
-  defaultHttpPath: '/ws/'
-}
+  defaultHttpPath: "/ws/",
+};

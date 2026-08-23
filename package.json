@@ -10,6 +10,7 @@
     "test": "node --experimental-strip-types --test src/lib/*.test.ts"
   },
   "dependencies": {
+    "emoji-picker-react": "^4.19.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "strophe.js": "5.0.0"
