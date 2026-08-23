@@ -8,6 +8,7 @@ export type Contact = {
   groups: string[];
   presence?: PresenceState;
   status?: string;
+  lastSeen?: number;
 };
 
 export type ChatMessage = {

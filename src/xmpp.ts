@@ -1,6 +1,8 @@
 import { $iq, $msg, $pres, Strophe } from "strophe.js";
 import { connectionSettings } from "./lib/connection-settings";
+import { lastSeenAt } from "./lib/display";
 import { bareJid } from "./lib/jid";
+import { reconnectDelay } from "./lib/reconnect";
 import type {
   Contact,
   LoginData,
@@ -12,11 +14,30 @@ type StropheConnection = InstanceType<typeof Strophe.Connection>;
 
 class XmppConnection extends EventTarget {
   private connection?: StropheConnection;
+  private login?: LoginData;
+  private reconnectAttempt = 0;
+  private reconnectTimer?: number;
+  private lastActivityRequested = new Set<string>();
   private account = "";
+  private presence: OwnPresenceState = "online";
 
   async connect(login: LoginData): Promise<string> {
     await this.disconnect();
+    this.login = login;
+    this.reconnectAttempt = 0;
+    this.presence = "online";
 
+    try {
+      return await this.open(login);
+    } catch (error) {
+      if (this.login === login) {
+        this.login = undefined;
+      }
+      throw error;
+    }
+  }
+
+  private open(login: LoginData, reconnecting = false): Promise<string> {
     const settings = connectionSettings(login, window.__JABBER_CONFIG__);
     this.emit("state", { state: "connecting" });
 
@@ -26,8 +47,11 @@ class XmppConnection extends EventTarget {
 
     return new Promise<string>((resolve, reject) => {
       let settled = false;
+      let connected = false;
       const fail = (message: string) => {
-        this.emit("state", { state: "error", error: message });
+        if (!reconnecting) {
+          this.emit("state", { state: "error", error: message });
+        }
         if (!settled) {
           settled = true;
           reject(new Error(message));
@@ -50,6 +74,8 @@ class XmppConnection extends EventTarget {
           status === Strophe.Status.CONNECTED ||
           status === Strophe.Status.ATTACHED
         ) {
+          connected = true;
+          this.reconnectAttempt = 0;
           const account = this.handleConnected(
             connection,
             settings.jid,
@@ -77,8 +103,10 @@ class XmppConnection extends EventTarget {
           return;
         }
         if (status === Strophe.Status.DISCONNECTED) {
-          this.emit("state", { state: "offline" });
-          if (!settled) {
+          this.connection = undefined;
+          if (connected) {
+            this.scheduleReconnect();
+          } else if (!settled) {
             fail("Соединение с Openfire закрыто");
           }
         }
@@ -87,12 +115,47 @@ class XmppConnection extends EventTarget {
   }
 
   async disconnect(): Promise<void> {
+    this.login = undefined;
+    window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
     const activeConnection = this.connection;
     this.connection = undefined;
 
     if (activeConnection) {
       activeConnection.disconnect("Выход из Jabber React");
     }
+  }
+
+  private scheduleReconnect(): void {
+    const login = this.login;
+    if (!login) {
+      return;
+    }
+
+    const delay = reconnectDelay(this.reconnectAttempt);
+    if (delay === null) {
+      this.login = undefined;
+      this.emit("state", {
+        state: "error",
+        error: "Не удалось восстановить соединение с сервером",
+      });
+      this.emit("reconnect-failed", null);
+      return;
+    }
+
+    this.reconnectAttempt += 1;
+    this.emit("state", { state: "connecting" });
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = undefined;
+      if (this.login !== login) {
+        return;
+      }
+      void this.open(login, true).catch(() => {
+        if (this.login === login) {
+          this.scheduleReconnect();
+        }
+      });
+    }, delay);
   }
 
   async sendMessage(to: string, body: string): Promise<string> {
@@ -106,6 +169,7 @@ class XmppConnection extends EventTarget {
   }
 
   setPresence(presence: OwnPresenceState): void {
+    this.presence = presence;
     if (!this.connection?.connected) {
       return;
     }
@@ -129,12 +193,13 @@ class XmppConnection extends EventTarget {
     server: string,
   ): string {
     this.account = bareJid(connection.jid);
+    this.lastActivityRequested.clear();
     this.registerHandlers(connection);
     this.emit("state", { state: "online", account: this.account });
-    this.setPresence("online");
+    this.setPresence(this.presence);
     connection.sendIQ(
       $iq({ type: "get" }).c("query", { xmlns: Strophe.NS.ROSTER }),
-      (stanza) => this.onRoster(stanza),
+      (stanza) => this.onRoster(connection, stanza),
     );
 
     const domain =
@@ -161,7 +226,7 @@ class XmppConnection extends EventTarget {
     );
     connection.addHandler(
       (stanza) => {
-        this.onRoster(stanza);
+        this.onRoster(connection, stanza);
         this.confirmRosterUpdate(connection, stanza);
         return true;
       },
@@ -185,7 +250,7 @@ class XmppConnection extends EventTarget {
     connection.send($iq(attributes));
   }
 
-  private onRoster(stanza: Element): void {
+  private onRoster(connection: StropheConnection, stanza: Element): void {
     const contacts: Contact[] = [...stanza.getElementsByTagName("item")]
       .filter((item) => item.getAttribute("subscription") !== "remove")
       .map((item) => {
@@ -202,6 +267,9 @@ class XmppConnection extends EventTarget {
       });
 
     this.emit("roster", contacts);
+    contacts.forEach((contact) =>
+      this.requestLastActivity(connection, contact.jid),
+    );
   }
 
   private loadServerUsers(connection: StropheConnection, domain: string): void {
@@ -251,7 +319,7 @@ class XmppConnection extends EventTarget {
 
     connection.sendIQ(
       query,
-      (stanza) => this.onServerUsers(stanza),
+      (stanza) => this.onServerUsers(connection, stanza),
       () =>
         this.emit(
           "directory-error",
@@ -260,7 +328,7 @@ class XmppConnection extends EventTarget {
     );
   }
 
-  private onServerUsers(stanza: Element): void {
+  private onServerUsers(connection: StropheConnection, stanza: Element): void {
     const contacts = [...stanza.getElementsByTagName("item")]
       .map((item): Contact | null => {
         const jid = bareJid(
@@ -278,6 +346,9 @@ class XmppConnection extends EventTarget {
       .filter((contact): contact is Contact => contact !== null);
 
     this.emit("directory", contacts);
+    contacts.forEach((contact) =>
+      this.requestLastActivity(connection, contact.jid),
+    );
   }
 
   private onPresence(stanza: Element): boolean {
@@ -302,6 +373,32 @@ class XmppConnection extends EventTarget {
 
     this.emit("presence", detail);
     return true;
+  }
+
+  private requestLastActivity(
+    connection: StropheConnection,
+    jid: string,
+  ): void {
+    if (!jid || this.lastActivityRequested.has(jid)) {
+      return;
+    }
+    this.lastActivityRequested.add(jid);
+
+    connection.sendIQ(
+      $iq({ type: "get", to: jid }).c("query", { xmlns: "jabber:iq:last" }),
+      (stanza) => {
+        if (this.connection !== connection) {
+          return;
+        }
+        const lastSeen = lastSeenAt(
+          stanza.getElementsByTagName("query")[0]?.getAttribute("seconds") ??
+            null,
+        );
+        if (lastSeen !== null) {
+          this.emit("last-seen", { jid, lastSeen });
+        }
+      },
+    );
   }
 
   private onMessage(stanza: Element): boolean {

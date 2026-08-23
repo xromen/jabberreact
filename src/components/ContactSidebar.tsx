@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
+import { formatDate } from "../lib/display";
 import type {
   ConnectionState,
   Contact,
@@ -129,7 +130,11 @@ export function ContactSidebar({
             <Avatar name={contact.name} presence={contact.presence} />
             <span className="contact-copy">
               <strong>{contact.name}</strong>
-              <small>{contact.status || contact.jid}</small>
+              <small>
+                {contact.presence === "offline" && contact.lastSeen !== undefined
+                  ? `Последний раз в сети: ${formatDate(contact.lastSeen)}`
+                  : contact.status || contact.jid}
+              </small>
             </span>
             {!!unread[contact.jid] && (
               <span className="unread-badge">{unread[contact.jid]}</span>

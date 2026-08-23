@@ -476,7 +476,7 @@ export function Chat({
           const needDivider =
             !previous || !isSameDay(previous.timestamp, message.timestamp);
           const compact =
-            !!previous && previous.from === message.from && !needDivider;
+            !!previous && previous.from === message.from && message.timestamp - previous.timestamp < 5 * 60 * 1000 && !needDivider;
           const author =
             message.direction === "outgoing" ? account : contact.name;
 

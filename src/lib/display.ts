@@ -29,6 +29,16 @@ export function formatDate(timestamp: number): string {
   }).format(timestamp);
 }
 
+export function lastSeenAt(
+  seconds: string | null,
+  now = Date.now(),
+): number | null {
+  const elapsed = Number(seconds);
+  return seconds !== null && Number.isFinite(elapsed) && elapsed >= 0
+    ? now - elapsed * 1_000
+    : null;
+}
+
 export function formatDividerDate(timestamp: number): string {
   return new Intl.DateTimeFormat("ru", {
     day: "2-digit",

@@ -92,7 +92,26 @@ export default function App() {
 
             setContacts((current) =>
                 ensureContact(current, presence.jid).map((contact) =>
-                    contact.jid === presence.jid ? {...contact, ...presence} : contact,
+                    contact.jid === presence.jid
+                        ? {
+                            ...contact,
+                            ...presence,
+                            lastSeen:
+                                presence.presence === "offline"
+                                    ? Date.now()
+                                    : contact.lastSeen,
+                        }
+                        : contact,
+                ),
+            );
+        };
+        const onLastSeen = (event: Event) => {
+            const detail = (event as CustomEvent<
+                Pick<Contact, "jid" | "lastSeen">
+            >).detail;
+            setContacts((current) =>
+                current.map((contact) =>
+                    contact.jid === detail.jid ? {...contact, ...detail} : contact,
                 ),
             );
         };
@@ -123,13 +142,16 @@ export default function App() {
             }
             showNotification(incoming.from, incoming.body);
         };
+        const onReconnectFailed = () => void logout();
 
         xmppConnection.addEventListener("state", onState);
         xmppConnection.addEventListener("roster", onRoster);
         xmppConnection.addEventListener("directory", onDirectory);
         xmppConnection.addEventListener("directory-error", onDirectoryError);
         xmppConnection.addEventListener("presence", onPresence);
+        xmppConnection.addEventListener("last-seen", onLastSeen);
         xmppConnection.addEventListener("message", onMessage);
+        xmppConnection.addEventListener("reconnect-failed", onReconnectFailed);
 
         return () => {
             xmppConnection.removeEventListener("state", onState);
@@ -137,7 +159,9 @@ export default function App() {
             xmppConnection.removeEventListener("directory", onDirectory);
             xmppConnection.removeEventListener("directory-error", onDirectoryError);
             xmppConnection.removeEventListener("presence", onPresence);
+            xmppConnection.removeEventListener("last-seen", onLastSeen);
             xmppConnection.removeEventListener("message", onMessage);
+            xmppConnection.removeEventListener("reconnect-failed", onReconnectFailed);
             void xmppConnection.disconnect();
         };
     }, []);

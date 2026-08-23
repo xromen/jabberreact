@@ -88,7 +88,7 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 72px 280px minmax(0, 1fr);
+  grid-template-columns: 72px 300px minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background: #313338;
@@ -764,6 +764,26 @@ button:disabled {
   padding: 0 0 16px;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-color: #5865f2 #2b2d31;
+  scrollbar-width: auto;
+}
+
+.message-list::-webkit-scrollbar {
+  width: 14px;
+}
+
+.message-list::-webkit-scrollbar-track {
+  background: #2b2d31;
+}
+
+.message-list::-webkit-scrollbar-thumb {
+  border: 3px solid #2b2d31;
+  border-radius: 10px;
+  background: #5865f2;
+}
+
+.message-list::-webkit-scrollbar-thumb:hover {
+  background: #7983f5;
 }
 
 .scroll-to-bottom {
@@ -771,29 +791,29 @@ button:disabled {
   right: 22px;
   bottom: 14px;
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   padding: 0;
-  border: 1px solid #1e1f22;
+  border: 1px solid #7983f5;
   border-radius: 50%;
-  background: #2b2d31;
-  color: #dbdee1;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.38);
+  background: #5865f2;
+  color: white;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.48);
   cursor: pointer;
   animation: chat-tool-enter 0.14s ease-out;
   z-index: 2;
 }
 
 .scroll-to-bottom:hover {
-  background: #404249;
+  background: #4752c4;
   color: white;
   transform: translateY(-1px);
 }
 
 .scroll-to-bottom .icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
 }
 
 .history-loader,
